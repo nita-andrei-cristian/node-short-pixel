@@ -1,1 +1,5 @@
-console.log("Hello world");
+import ShortPixelClient from "./components/client.js";
+
+export default {
+  ShortPixelClient
+};

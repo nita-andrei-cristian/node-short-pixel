@@ -1,0 +1,30 @@
+{
+  "name": "node-shortpixel",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "ShortPixel API integration in node js for optimizing images",
+  "main": "main.js",
+  "scripts": {
+    "test": "NODE_OPTIONS=--experimental-vm-modules jest"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nita-andrei-cristian/node-short-pixel.git"
+  },
+  "keywords": [
+    "optimize",
+    "image"
+  ],
+  "author": "nita-andrei-cristian",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/nita-andrei-cristian/node-short-pixel/issues"
+  },
+  "homepage": "https://github.com/nita-andrei-cristian/node-short-pixel#readme",
+  "devDependencies": {
+    "jest": "^30.2.0"
+  },
+  "dependencies": {
+    "form-data": "^4.0.5"
+  }
+}
