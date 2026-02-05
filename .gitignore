@@ -1,1 +1,4 @@
 *.js.swp
+*.js.swap
+coverage/
+node_modules/
