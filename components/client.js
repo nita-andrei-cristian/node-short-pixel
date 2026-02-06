@@ -1,4 +1,3 @@
-
 /**
  * Hello!
  * 
@@ -8,24 +7,11 @@
  * ShortPixel supports optimizing images, as well as upscaling, replacing background and more.
  *
  * ------ BASICS
+ * Please see the README.md or docs for this module for basic usage and examples.
  *
- * This node package should cover all of the necesities via this client
- * the client works by plugging in an apiKey and has the following helper functions:
+ * Here is the idea in short form, the CLI is an interface with creates an abstract
+ * wrapper over ShortPixel functionality. The main functions are fromFile, fromBuffer, fromUrl and plurals. The plurals (fromFiles, fromBuffers, fromUrls) are meant to batch process tasks in parallel for increased performance. 
  *
- * 1.fromUrl
- * 2.fromUrls
- * 3.fromBuffer
- * 4.fromBuffers
- * 5.fromFile
- * 6.fromFiles
- *
- * The plurals (2,4,6) support batch uploading which means the images are being processed
- * all at once in paralell.
- *
- * 1. and 2. use the Reducer API for optimizing a url image, where 3-6 utilize the POST-REDUCER API to optimize
- * an image file (which can be an actual local file or a buffer)
- *
- * All functions 1-6 return a 'Source', the 'Source' can be configured via the second parameter of functions 1-6
  * It's advisable to visit the official docs : https://shortpixel.com/api-docs for configuration information
  *
  * You can upscale any image, you can replace transparent background with other images and so much more. Check the official docs for info.
@@ -55,8 +41,8 @@
  * You may also create a source by yourself altough is not recommended. (The property Source exposes the class)
  *
  * Note : Proxy is not yet implemented.
+ *
 */
-
 
 import {
   Source,
@@ -69,6 +55,33 @@ import {
   fromFiles,
   _config
 } from "./reducer.js";
+
+const DEFAULT_BUFFER_NAME = "image.bin";
+const URL_PROTOCOL_RE = /^https?:$/i;
+
+function isUrlString(value) {
+  if (typeof value !== "string" || !value.trim()) return false;
+  try {
+    const parsed = new URL(value);
+    return URL_PROTOCOL_RE.test(parsed.protocol);
+  } catch {
+    return false;
+  }
+}
+
+function isBufferLikeEntry(value) {
+  return (
+    Buffer.isBuffer(value) ||
+    (value && typeof value === "object" && "buffer" in value)
+  );
+}
+
+function isFileLikeEntry(value) {
+  return (
+    typeof value === "string" ||
+    (value && typeof value === "object" && ("filename" in value || "buffer" in value))
+  );
+}
 
 class Client {
 
@@ -90,9 +103,8 @@ class Client {
       _config[name] = value;
   }
 
-  /**
-   * HELPLERS
-   */
+  // CORE FUNCTIONALITY
+
   async fromUrl(url, options) {
     return await fromUrl(url, options);
   }
@@ -115,6 +127,229 @@ class Client {
   }
   async fromFiles(paths, options) {
     return await fromFiles(paths, options);
+  }
+
+  /**
+   * User-friendly aliases for default optimization helpers.
+   */
+  async optimizeUrl(url, options) {
+    return await this.fromUrl(url, options);
+  }
+  async optimizeUrls(urls, options) {
+    return await this.fromUrls(urls, options);
+  }
+
+  async optimizeBuffer(buffer, filename, options) {
+    return await this.fromBuffer(buffer, filename, options);
+  }
+  async optimizeBuffers(buffers, defaultName, options) {
+    return await this.fromBuffers(buffers, defaultName, options);
+  }
+
+  async optimizeFile(path, options) {
+    return await this.fromFile(path, options);
+  }
+  async optimizeFiles(paths, options) {
+    return await this.fromFiles(paths, options);
+  }
+
+  // even more abstract functionality, this allows optimizing without specifying any type
+  _splitOptimizeOptions(options = {}) {
+    const {
+      filename = null,
+      defaultName = null,
+      ...apiOptions
+    } = options || {};
+
+    return { filename, defaultName, apiOptions };
+  }
+
+  /* converts the array of inputs to the most likely optimize function (while keeping the properties) */
+  // notice that only defaultname and filename are used in specific cases, such as local files and buffers.
+  async _optimizeMany(inputs, { filename, defaultName, apiOptions }) {
+    if (!Array.isArray(inputs) || inputs.length === 0) {
+      throw new Error("optimize expects a non-empty list when input is an array.");
+    }
+
+    const hasUrlStrings = inputs.some((item) => typeof item === "string" && isUrlString(item));
+    const hasPathStrings = inputs.some((item) => typeof item === "string" && !isUrlString(item));
+    if (hasUrlStrings && hasPathStrings) {
+      throw new Error("Cannot mix local paths and URLs in a single optimize array.");
+    }
+
+    if (inputs.every((item) => typeof item === "string" && isUrlString(item))) {
+      return await this.fromUrls(inputs, apiOptions);
+    }
+
+    if (inputs.every((item) => item && typeof item === "object" && typeof item.url === "string")) {
+      return await this.fromUrls(inputs.map((item) => item.url), apiOptions);
+    }
+
+    if (inputs.every((item) => isBufferLikeEntry(item))) {
+      const name = defaultName || filename || DEFAULT_BUFFER_NAME;
+      return await this.fromBuffers(inputs, name, apiOptions);
+    }
+
+    if (inputs.every((item) => isFileLikeEntry(item))) {
+      return await this.fromFiles(inputs, apiOptions);
+    }
+
+    throw new Error("Unsupported optimize array input. Use URLs, file paths, or buffers.");
+  }
+
+  // takes an input and tries to figure out how to optimize it
+  async _optimizeObject(input, { filename, defaultName, apiOptions }) {
+    const scopedOptions = {
+      ...(input.options && typeof input.options === "object" ? input.options : {}),
+      ...apiOptions
+    };
+
+    if (Array.isArray(input.urls)) {
+      return await this.fromUrls(input.urls, scopedOptions);
+    }
+    if (typeof input.url === "string") {
+      return await this.fromUrl(input.url, scopedOptions);
+    }
+
+    if (Array.isArray(input.files)) {
+      return await this.fromFiles(input.files, scopedOptions);
+    }
+    if (typeof input.file === "string") {
+      return await this.fromFile(input.file, scopedOptions);
+    }
+    if (typeof input.path === "string") {
+      return await this.fromFile(input.path, scopedOptions);
+    }
+    if (typeof input.filename === "string") {
+      if (Buffer.isBuffer(input.buffer)) {
+        return await this.fromBuffer(input.buffer, input.filename, scopedOptions);
+      }
+      return await this.fromFile(input.filename, scopedOptions);
+    }
+
+    if (Array.isArray(input.buffers)) {
+      const name = input.defaultName || defaultName || filename || DEFAULT_BUFFER_NAME;
+      return await this.fromBuffers(input.buffers, name, scopedOptions);
+    }
+    if (Buffer.isBuffer(input.buffer)) {
+      const name = input.filename || filename || DEFAULT_BUFFER_NAME;
+      return await this.fromBuffer(input.buffer, name, scopedOptions);
+    }
+
+    throw new Error("Unsupported optimize object input.");
+  }
+
+  /**
+   * Generic optimization dispatcher:
+   * - URL string/object -> reducer
+   * - file path/object  -> post-reducer
+   * - buffer/object     -> post-reducer
+   * - arrays route to the corresponding batch helper
+   */
+  async optimize(input, options = {}) {
+    // here we inject the options into apiOptions
+    const { filename, defaultName, apiOptions } = this._splitOptimizeOptions(options);
+
+    if (input == null) {
+      throw new Error("optimize requires an input (url/path/buffer/list/object).");
+    }
+
+    if (Buffer.isBuffer(input)) {
+      const name = filename || DEFAULT_BUFFER_NAME;
+      return await this.fromBuffer(input, name, apiOptions);
+    }
+
+    if (typeof input === "string") {
+      if (isUrlString(input)) return await this.fromUrl(input, apiOptions);
+      return await this.fromFile(input, apiOptions);
+    }
+
+    if (Array.isArray(input)) {
+      return await this._optimizeMany(input, { filename, defaultName, apiOptions });
+    }
+
+    if (input && typeof input === "object") {
+      return await this._optimizeObject(input, { filename, defaultName, apiOptions });
+    }
+
+    throw new Error("Unsupported optimize input type.");
+  }
+
+  // here are really just a bunch of aliases for different features.
+  _withFeature(input, featureOptions, options = {}) {
+    return this.optimize(input, { ...featureOptions, ...options });
+  }
+
+  async lossless(input, options = {}) {
+    return await this._withFeature(input, { lossy: 0 }, options);
+  }
+
+  async lossy(input, options = {}) {
+    return await this._withFeature(input, { lossy: 1 }, options);
+  }
+
+  async glossy(input, options = {}) {
+    return await this._withFeature(input, { lossy: 2 }, options);
+  }
+
+  async wait(input, seconds, options = {}) {
+    return await this._withFeature(input, { wait: seconds }, options);
+  }
+
+  async upscale(input, factor = 2, options = {}) {
+    return await this._withFeature(input, { upscale: factor }, options);
+  }
+
+  async rescale(input, width, height, options = {}) {
+    return await this._withFeature(
+      input,
+      { resize: 1, resize_width: width, resize_height: height },
+      options
+    );
+  }
+
+  async resizeOuter(input, width, height, options = {}) {
+    return await this.rescale(input, width, height, options);
+  }
+
+  async resizeInner(input, width, height, options = {}) {
+    return await this._withFeature(
+      input,
+      { resize: 3, resize_width: width, resize_height: height },
+      options
+    );
+  }
+
+  async smartCrop(input, width, height, options = {}) {
+    return await this._withFeature(
+      input,
+      { resize: 4, resize_width: width, resize_height: height },
+      options
+    );
+  }
+
+  async convert(input, convertto, options = {}) {
+    return await this._withFeature(input, { convertto }, options);
+  }
+
+  async cmykToRgb(input, enabled = true, options = {}) {
+    return await this._withFeature(input, { cmyk2rgb: enabled ? 1 : 0 }, options);
+  }
+
+  async keepExif(input, enabled = true, options = {}) {
+    return await this._withFeature(input, { keep_exif: enabled ? 1 : 0 }, options);
+  }
+
+  async backgroundChange(input, background = 1, options = {}) {
+    return await this._withFeature(input, { bg_remove: background }, options);
+  }
+
+  async backgroundRemove(input, options = {}) {
+    return await this.backgroundChange(input, 1, options);
+  }
+
+  async refresh(input, enabled = true, options = {}) {
+    return await this._withFeature(input, { refresh: enabled ? 1 : 0 }, options);
   }
 
   /**

@@ -1,7 +1,6 @@
 /*
  *
  * THIS IS A TEST
- * Currently this is not documented, please enter on this repo in 24h from now
  *
  *
  * */ 
