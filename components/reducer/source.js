@@ -268,8 +268,13 @@ class Source {
   /**
    * PostReducer (upload local files or buffers)
    * Supports batching via src.files = [{ filename }, { buffer, filename }]
+   *
+   * Remember, this is the API specific for files and buffer in general. Reducer is only for URL.
+   *
+   * The process is a bit more complex here than the reducer API.
    */
   async postReducer() {
+    // always sanitize data when starting
     validateConfig();
     const effectiveOptions = this._getEffectiveOptions();
 
@@ -310,17 +315,20 @@ class Source {
         }
       }
 
+      // items is the array that resembles our input
       return {
-        index: idx,
-        buffer: hasBuffer ? f.buffer : null,
-        path: hasBuffer ? null : displayName,
-        displayName,
-        fileKey: `file${idx + 1}`
+        index: idx, // image index : 0, 1, 2 , ...
+        buffer: hasBuffer ? f.buffer : null, // local file or buffer
+        path: hasBuffer ? null : displayName, // local file or buffer
+        displayName, // display name (each file has one)
+        fileKey: `file${idx + 1}` // ID
       };
     });
 
     // Upload call (multipart) using Web FormData
     const makeUploadCall = async () => {
+      // We use FormData to match the API headers used by post reducer PHP. Please do
+      // not send custom-made options unless you know what you are doing. See the official documentation
       const { FormDataCtor, FileCtor } = await getWebFormDataAndFile();
       const form = new FormDataCtor();
 
@@ -356,6 +364,8 @@ class Source {
 
       // IMPORTANT: do NOT manually set multipart headers; fetch will do it correctly
       // (this is what fixes the nginx 400)
+
+      // By the way, this function requests the json repeatdly based on the configuration untill it receives it
       const data = await requestJsonWithRetry(
         POST_REDUCER_URL,
         {
@@ -366,8 +376,9 @@ class Source {
         { retries: config.retries, retryDelay: config.retryDelay, timeout: config.timeout }
       );
 
-      return ensureMetaArray(data);
+      return ensureMetaArray(data); // form meta array
     };
+
 
     // 1) Upload once
     const uploadMetas = await makeUploadCall();
@@ -389,6 +400,8 @@ class Source {
       return { index: it.index, input: it, error: err, meta };
     });
 
+    // Here iamges may fail, see the status message for info
+    // A common fail may be images that are too large
     const failed = perItem.filter((x) => x.error);
     if (failed.length) {
       throw new ShortPixelBatchError("One or more files failed during post-reducer upload.", { items: perItem });
@@ -421,14 +434,17 @@ class Source {
     }
 
     let attempts = 0;
+    // This is the "slow part" of the process, the Polling loop.
+    // Here we will obtain the data 'by force'. We poll continuosly only for the items not loaded
     while (attempts < config.poll.maxAttempts) {
       const currentPendingOriginals = perItem
         .filter((x) => x.meta && getSpCode(x.meta) === 1)
         .map((x) => x.meta.OriginalURL)
         .filter(Boolean);
 
-      if (currentPendingOriginals.length === 0) break;
+      if (currentPendingOriginals.length === 0) break; // done waiting
 
+      // prepare the payload
       const payload2 = {
         key: config.key,
         plugin_version: config.plugin_version,
@@ -438,6 +454,7 @@ class Source {
       };
       ensureUrlList(payload2.urllist);
 
+      // data2 must be called with retry, otherwise it can lead to undefined problems. Altough it adds delay.
       const data2 = await requestJsonWithRetry(
         REDUCER_URL,
         {
@@ -465,9 +482,9 @@ class Source {
       }
 
       const stillPending = perItem.some((x) => x.meta && getSpCode(x.meta) === 1);
-      if (!stillPending) break;
+      if (!stillPending) break; // done waiting
 
-      await sleep(config.poll.interval);
+      await sleep(config.poll.interval); // wait before retrying
       attempts++;
     }
 
@@ -493,8 +510,12 @@ class Source {
   /**
    * Download the optimized files from the latest reducer/postReducer call into outputDir.
    * Returns an array of { path, meta }.
+   *
+   * You should know that at the end of each API call (reducer / post-reducer), 
+   * we save the lastMetas and lastResults, the point is to use them here.
    */
   async downloadTo(outputDir, { timeout = config.timeout } = {}) {
+    // sanitize input
     if (!outputDir || typeof outputDir !== "string" || !outputDir.trim()) {
       throw new ShortPixelInvalidRequestError("downloadTo requires a target directory path.", {
         spCode: -109,
@@ -533,6 +554,7 @@ class Source {
     };
 
     for (let i = 0; i < this.lastMetas.length; i++) {
+      // for each meta we download
       const meta = this.lastMetas[i];
       const bestUrl = pickBestOutputUrl(meta, effectiveOptions);
 
@@ -540,8 +562,8 @@ class Source {
         throw new ShortPixelError("No downloadable URL returned by ShortPixel for item.", { payload: meta });
       }
 
+      // try to fetch the result
       const res = await fetchWithTimeout(bestUrl, { redirect: "follow" }, timeout);
-
       if (!res.ok) {
         const body = await res.text().catch(() => "");
         throw new ShortPixelError("Failed to download optimized file.", {
@@ -551,13 +573,14 @@ class Source {
         });
       }
 
+      // construct the buf
       const buf = Buffer.from(await res.arrayBuffer());
       const urlPath = new URL(bestUrl).pathname || "";
       const nameFromUrl = path.basename(urlPath) || null;
 
       const inputInfo = this.lastResults?.[i]?.input ?? null;
       const sourceNameRaw =
-        (inputInfo?.displayName && path.basename(inputInfo.displayName)) ||
+        (inputInfo?.displayName && path.basename(inputInfo.displayName)) || // verify all requirments
         (inputInfo?.path && path.basename(inputInfo.path)) ||
         (inputInfo?.filename && path.basename(inputInfo.filename)) ||
         (inputInfo?.url && (() => {
@@ -569,13 +592,14 @@ class Source {
         })()) ||
         (meta?.OriginalURL && (() => {
           try {
-            return path.basename(new URL(meta.OriginalURL).pathname || "");
+            return path.basename(new URL(meta.OriginalURL).pathname || ""); // revert to orignal url
           } catch {
             return null;
           }
         })()) ||
         null;
 
+      // Prepare for writing the file
       const parsedSource = sourceNameRaw ? path.parse(sourceNameRaw) : null;
       const sourceBase = parsedSource?.name || `optimized_${i + 1}`;
       const sourceExt = parsedSource?.ext ? parsedSource.ext.replace(/^\./, "").toLowerCase() : null;
@@ -591,6 +615,7 @@ class Source {
       downloads.push({ path: outPath, meta });
     }
 
+    // returns downloaded files
     return downloads;
   }
 }
