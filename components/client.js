@@ -356,9 +356,8 @@ class Client {
    * Expose Source (advanced usage)
    */
   Source(){
-	return Source;	
+    return Source;
   }
-
 }
 
 export default Client;

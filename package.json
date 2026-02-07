@@ -1,5 +1,5 @@
 {
-  "name": "node-shortpixel",
+  "name": "shortpixel",
   "version": "1.0.0",
   "type": "module",
   "types": "./types/main.d.ts",
@@ -17,7 +17,7 @@
     "image"
   ],
   "author": "nita-andrei-cristian",
-  "license": "ISC",
+  "license": "GPL",
   "bugs": {
     "url": "https://github.com/nita-andrei-cristian/node-short-pixel/issues"
   },

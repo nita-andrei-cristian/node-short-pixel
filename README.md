@@ -1,8 +1,15 @@
-# node-shortpixel
+# shortpixel
 
-A Node.js SDK for the ShortPixel API with an ergonomics-first design: you can use explicit helpers (`fromFile`, `fromUrl`) or a highly abstracted interface (`optimize`, `upscale`, `rescale`, `backgroundChange`, and more).
+ShortPixel is an image optimization service built to make websites faster with minimal effort. Official website: [https://shortpixel.com/](https://shortpixel.com/).
 
-This is the complete, final documentation for the current API surface in this repository.
+In practice, ShortPixel helps you shrink heavy images, serve modern formats like WebP/AVIF, and keep visual quality high. Real-world results can go up to **86% image compression**, which means faster pages, better UX, and stronger SEO outcomes.
+
+This repository is the Node.js SDK for that product. It gives you both:
+
+- a simple, abstract DX (`optimize`, `upscale`, `rescale`, `backgroundChange`, etc.)
+- and low-level, explicit control (`fromFile`, `fromUrl`, `Source`, per-item `Meta`, polling/retry tuning)
+
+This README is the complete documentation for the current API surface in this repository.
 
 ## Table of Contents
 
@@ -23,7 +30,9 @@ This is the complete, final documentation for the current API surface in this re
 
 ## What this SDK solves
 
-ShortPixel exposes two main endpoints:
+ShortPixel itself focuses on one core goal: keep images looking great while making them much smaller and easier to deliver at scale.
+
+Inside the API, there are two main endpoints:
 
 - Reducer API: optimizes images from remote URLs.
 - Post-Reducer API: optimizes local files or buffers uploaded as multipart.
@@ -39,25 +48,27 @@ In short:
 ---
 
 ## Installation
-* To be uploaded to npm
 
 ```bash
-npm install node-shortpixel
+npm install https://github.com/nita-andrei-cristian/node-short-pixel.git
 ```
 
-In this local repository, the main import is:
+After installation, import from `shortpixel`:
 
 ```js
-import SHORTPIXEL from "./main.js";
-```
-
-When consumed as a published package, typical usage is:
-
-```js
-import SHORTPIXEL from "node-shortpixel";
+import SHORTPIXEL from "shortpixel";
 ```
 
 ### Runtime requirements
+
+- Current state: version 1 (v1.x), ESM-only package
+- In your app `package.json`, you must set:
+
+```json
+{
+  "type": "module"
+}
+```
 
 - ESM (`"type": "module"`)
 - Modern Node.js (ideally Node 20+)
@@ -67,19 +78,19 @@ import SHORTPIXEL from "node-shortpixel";
 ## Quick Start
 
 ```js
-import SHORTPIXEL from "./main.js";
+import SHORTPIXEL from "shortpixel";
 
 const { ShortPixelClient } = SHORTPIXEL;
 const cli = new ShortPixelClient({
   apiKey: process.env.SHORTPIXEL_API_KEY,
 });
 
-const src = await cli.upscale("test/assets/panda-small.png", 2, {
+const src = await cli.upscale("assets/panda.png", 2, {
   lossy: 2,
   convertto: "+webp",
 });
 
-const files = await src.downloadTo("test/output-real");
+const files = await src.downloadTo("./output");
 console.log(files);
 ```
 
@@ -113,9 +124,11 @@ Each operation returns a `Source`.
 - `lastResults`: input-to-meta mapping,
 - `downloadTo(outputDir)`: downloads optimized outputs locally.
 
+For regular usage, it's recommended to not directly use the `Source`.
+
 ### `Meta`
 
-Each optimized item has metadata with status (`Status.Code`) and output URLs (`LossyURL`, `LosslessURL`, `WebP*`, `AVIF*`, etc).
+Each optimized item has metadata with status (`Status.Code`) and output URLs (`LossyURL`, `LosslessURL`, `WebP*`, `AVIF*`, etc). Useful for debugging
 
 ---
 
@@ -197,7 +210,7 @@ new ShortPixelClient({ apiKey, pluginVersion = "NP001", proxy = null })
 ```
 
 - `apiKey` is required.
-- `pluginVersion` must be a string with max 5 characters. Altough it's optional
+- `pluginVersion` must be a string with max 5 characters. Although it's optional
 - `proxy` is optional and can use `http://` or `https://` proxy URLs.
 - All final outbound image/API requests are forced to `https://`; `http://` targets are rejected with error.
 
@@ -218,7 +231,7 @@ Useful keys:
 - `poll` -> `{ enabled, interval, maxAttempts }`
 
 #### Important
-Please considering increasing the poll interval and maxAttempts if the polling process fails due to timeout. This is required on complex operations like background-removal or smart resizing.
+Please consider increasing the poll interval and maxAttempts if the polling process fails due to timeout. This is required on complex operations like background-removal or smart resizing.
 
 ### Core helpers
 
@@ -232,8 +245,6 @@ Please considering increasing the poll interval and maxAttempts if the polling p
 
 ### `optimize*` aliases
 
-  Those are yet to be tested in real environments
-
 - `optimize(input, options)`
 - `optimizeUrl(url, options)`
 - `optimizeUrls(urls, options)`
@@ -243,8 +254,6 @@ Please considering increasing the poll interval and maxAttempts if the polling p
 - `optimizeBuffers(buffers, defaultName, options)`
 
 ### Feature-first aliases
-
-  Those are yet to be tested in real environments
 
 - `lossless(input, options)` -> `lossy: 0`
 - `lossy(input, options)` -> `lossy: 1`
@@ -262,12 +271,12 @@ Please considering increasing the poll interval and maxAttempts if the polling p
 - `backgroundRemove(input, options)` -> `bg_remove: 1`
 - `refresh(input, enabled = true, options)` -> `refresh`
 
-See the Official documentation for more information : https://shortpixel.com/api-docs
+See the Official API documentation for more information : https://shortpixel.com/api-docs
 
 ### Source exposure
 
 ```js
-const SourceCtor = cli.Source();
+const Source = cli.Source(); // Source is a class
 ```
 
 ---
@@ -313,21 +322,21 @@ Before requests are sent, the SDK validates at minimum:
 ## 1) Basic local file optimization
 
 ```js
-const src = await cli.fromFile("test/assets/panda-small.png", { lossy: 1 });
-await src.downloadTo("test/output-real");
+const src = await cli.fromFile("assets/panda.png", { lossy: 1 });
+await src.downloadTo("./output");
 ```
 
 ## 2) User-friendly alias
 
 ```js
-const src = await cli.optimizeFile("test/assets/panda-small.png", { lossy: 2 });
-await src.downloadTo("test/output-real");
+const src = await cli.optimizeFile("assets/otherImage.png", { lossy: 2 });
+await src.downloadTo("./output");
 ```
 
 ## 3) Generic optimization without specifying input type
 
 ```js
-// URLS HAVEN'T BEEN TESTED YET
+// Urls are yet to be tested in production
 const srcA = await cli.optimize("test/assets/panda-small.png", { lossy: 0 });
 const srcB = await cli.optimize("https://images.unsplash.com/photo-1506744038136-46273834b3fb", { lossy: 1 });
 const srcC = await cli.optimize(Buffer.from("..."), { filename: "upload.png", lossy: 2 });
@@ -384,6 +393,7 @@ await src.downloadTo("test/output-real");
 Solid color + alpha (`#rrggbbxx`):
 
 ```js
+// Warning, this might take a while to process
 const src = await cli.backgroundChange("test/assets/panda-small.png", "#00ff0080", {
   lossy: 2,
   convertto: "+webp",
@@ -394,6 +404,7 @@ await src.downloadTo("test/output-real");
 Custom background image URL:
 
 ```js
+// untested in production environments
 const src = await cli.backgroundChange(
   "test/assets/panda-small.png",
   "https://example.com/background.jpg",
@@ -439,7 +450,7 @@ await src.downloadTo("test/output-real");
 ## 11) URL batch
 
 ```js
-// URLS HAVEN'T BEEN TESTED YET
+// this hasn't been tested in production yet
 const src = await cli.fromUrls([
   "https://images.unsplash.com/photo-1506744038136-46273834b3fb",
   "https://images.unsplash.com/photo-1506744038136-46273834b3fb"
@@ -581,7 +592,6 @@ Error objects may include:
 Recommended handling pattern:
 
 ```js
-// YET TO BE TESTED
 try {
   const src = await cli.fromFile("test/assets/panda-small.png", { upscale: 9 });
   await src.downloadTo("test/output-real");
@@ -628,6 +638,8 @@ Run specific integration groups:
 RUN_SHORTPIXEL_REAL=2 SHORTPIXEL_API_KEY="your-key" npm test
 RUN_SHORTPIXEL_REAL=3 SHORTPIXEL_API_KEY="your-key" npm test
 RUN_SHORTPIXEL_REAL=4 SHORTPIXEL_API_KEY="your-key" npm test
+RUN_SHORTPIXEL_REAL=5 SHORTPIXEL_API_KEY="your-key" npm test
+RUN_SHORTPIXEL_REAL=6 SHORTPIXEL_API_KEY="your-key" npm test
 RUN_SHORTPIXEL_ALL_REAL=1 SHORTPIXEL_API_KEY="your-key" npm test
 ```
 

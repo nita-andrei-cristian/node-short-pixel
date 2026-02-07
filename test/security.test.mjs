@@ -136,4 +136,22 @@ describe("Network security and proxy behavior", () => {
     expect(err.message).toMatch(/downloadTo cannot run before an optimization call/i);
     expect(err.message).toMatch(/fromUrl|optimize/i);
   });
+
+  test("rejects invalid upscale value in fromFile with explicit validation error", async () => {
+    const client = new ShortPixelClient({ apiKey: "x" });
+    global.fetch = jest.fn();
+
+    let err = null;
+    try {
+      await client.fromFile(path.join("test", "assets", "panda-small.png"), { upscale: 9 });
+    } catch (e) {
+      err = e;
+    }
+
+    expect(err).toBeTruthy();
+    expect(err.name).toBe("ShortPixelInvalidRequestError");
+    expect(err.spCode).toBe(-116);
+    expect(err.message).toMatch(/upscale must be 0, 2, 3, or 4/i);
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
 });
