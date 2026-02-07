@@ -1,9 +1,9 @@
-import { config } from "./config";
+import { config } from "./config.js";
 import {
   ShortPixelError,
   ShortPixelAuthError,
   ShortPixelInvalidRequestError
-} from "./error-utils";
+} from "./error-utils.js";
 
 const HTTPS_PROTOCOL = "https:";
 const HTTP_PROTOCOL = "http:";

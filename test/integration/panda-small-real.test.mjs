@@ -7,8 +7,8 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 
-import Client from "../../components/client"
-import { pickBestOutputUrl } from "../../components/reducer/pick-best-output-url";
+import Client from "../../components/client.js"
+import { pickBestOutputUrl } from "../../components/reducer/pick-best-output-url.js";
 
 // ESM __dirname
 const __filename = fileURLToPath(import.meta.url);

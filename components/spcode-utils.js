@@ -4,7 +4,7 @@ import {
   ShortPixelQuotaError,
   ShortPixelInvalidRequestError,
   ShortPixelTemporaryError
-} from "./error-utils";
+} from "./error-utils.js";
 
 export function classifyBySpCode(code) {
   if (code === -401 || code === -402) return { type: "auth", retry: false };

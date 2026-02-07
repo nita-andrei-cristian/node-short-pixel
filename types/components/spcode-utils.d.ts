@@ -4,4 +4,4 @@ export function classifyBySpCode(code: any): {
 };
 export function getSpCode(meta: any): number;
 export function buildErrorFromSp(meta: any, httpStatus?: number): ShortPixelError;
-import { ShortPixelError } from "./error-utils";
+import { ShortPixelError } from "./error-utils.js";

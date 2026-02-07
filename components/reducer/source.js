@@ -38,7 +38,7 @@ import {
   ShortPixelTemporaryError,
   ShortPixelInvalidRequestError,
   ShortPixelBatchError,
-} from "../error-utils";
+} from "../error-utils.js";
 
 import {
   validateOptions,
@@ -47,13 +47,13 @@ import {
   readJsonSafe,
   validatePollConfig,
   ensureHttpsUrl
-} from "../validate-utils";
+} from "../validate-utils.js";
 
 import {
   classifyBySpCode,
   buildErrorFromSp,
   getSpCode,
-} from "../spcode-utils";
+} from "../spcode-utils.js";
 
 import {
   sleep,
@@ -64,11 +64,11 @@ import {
   mimeFromFilename,
   getWebFormDataAndFile,
 
-} from "../common-utils";
-import { pickBestOutputUrl } from "./pick-best-output-url";
+} from "../common-utils.js";
+import { pickBestOutputUrl } from "./pick-best-output-url.js";
 
-import { config } from "../config";
-import { REDUCER_URL, POST_REDUCER_URL } from "./constants";
+import { config } from "../config.js";
+import { REDUCER_URL, POST_REDUCER_URL } from "./constants.js";
 
 /**
  * The Source class (Inspired by tinify style)

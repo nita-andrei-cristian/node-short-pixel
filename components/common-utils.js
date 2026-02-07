@@ -4,10 +4,10 @@ import {
   ShortPixelError,
   ShortPixelTemporaryError,
   ShortPixelInvalidRequestError
-} from "./error-utils";
-import { buildErrorFromSp } from "./spcode-utils";
-import { readJsonSafe, ensureHttpsUrl, normalizeProxyUrl } from "./validate-utils";
-import { config } from "./config";
+} from "./error-utils.js";
+import { buildErrorFromSp } from "./spcode-utils.js";
+import { readJsonSafe, ensureHttpsUrl, normalizeProxyUrl } from "./validate-utils.js";
+import { config } from "./config.js";
 
 let cachedProxyUrl = null;
 let cachedProxyDispatcher = null;

@@ -2,7 +2,7 @@
  * ShortPixel reducer entry point.
  */
 
-import { pickBestOutputUrl } from "./reducer/pick-best-output-url";
+import { pickBestOutputUrl } from "./reducer/pick-best-output-url.js";
 import {
   Source,
   fromUrl,
@@ -12,8 +12,8 @@ import {
   fromBuffers,
   fromFile,
   fromFiles
-} from "./reducer/source";
-import { config as _config } from "./config";
+} from "./reducer/source.js";
+import { config as _config } from "./config.js";
 
 export {
   Source,
