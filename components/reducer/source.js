@@ -45,7 +45,8 @@ import {
   validateConfig,
   ensureUrlList,
   readJsonSafe,
-  validatePollConfig
+  validatePollConfig,
+  ensureHttpsUrl
 } from "../validate-utils";
 
 import {
@@ -56,7 +57,6 @@ import {
 
 import {
   sleep,
-  normalizeUrl,
   fetchWithTimeout,
   requestJsonWithRetry,
   ensureMetaArray,
@@ -130,10 +130,7 @@ class Source {
     }
 
     const normalizedList = inputUrls.map((u, idx) => {
-      const normalized = normalizeUrl(u);
-      if (!normalized) {
-        throw new ShortPixelInvalidRequestError("Invalid URL for reducer.", { spCode: -102, payload: u, index: idx });
-      }
+      const normalized = ensureHttpsUrl(u, { fieldName: `URL #${idx + 1}`, spCode: -102 });
       return encodeURI(normalized);
     });
 
@@ -449,7 +446,9 @@ class Source {
         key: config.key,
         plugin_version: config.plugin_version,
         wait: config.wait,
-        urllist: currentPendingOriginals.map((u) => encodeURI(u)),
+        urllist: currentPendingOriginals.map((u, idx) =>
+          encodeURI(ensureHttpsUrl(u, { fieldName: `Polling URL #${idx + 1}`, spCode: -102 }))
+        ),
         ...effectiveOptions
       };
       ensureUrlList(payload2.urllist);
@@ -562,20 +561,27 @@ class Source {
         throw new ShortPixelError("No downloadable URL returned by ShortPixel for item.", { payload: meta });
       }
 
+      // Output URLs from provider metadata should still be fetched securely.
+      const downloadUrl = ensureHttpsUrl(bestUrl, {
+        fieldName: "Output URL",
+        spCode: -102,
+        upgradeHttp: true
+      });
+
       // try to fetch the result
-      const res = await fetchWithTimeout(bestUrl, { redirect: "follow" }, timeout);
+      const res = await fetchWithTimeout(downloadUrl, { redirect: "follow" }, timeout);
       if (!res.ok) {
         const body = await res.text().catch(() => "");
         throw new ShortPixelError("Failed to download optimized file.", {
           httpStatus: res.status,
           payload: body,
-          url: bestUrl
+          url: downloadUrl
         });
       }
 
       // construct the buf
       const buf = Buffer.from(await res.arrayBuffer());
-      const urlPath = new URL(bestUrl).pathname || "";
+      const urlPath = new URL(downloadUrl).pathname || "";
       const nameFromUrl = path.basename(urlPath) || null;
 
       const inputInfo = this.lastResults?.[i]?.input ?? null;

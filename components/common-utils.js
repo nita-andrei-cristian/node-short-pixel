@@ -1,8 +1,16 @@
 import fs from "fs";
 import path from "path";
-import { ShortPixelError, ShortPixelTemporaryError } from "./error-utils";
+import {
+  ShortPixelError,
+  ShortPixelTemporaryError,
+  ShortPixelInvalidRequestError
+} from "./error-utils";
 import { buildErrorFromSp } from "./spcode-utils";
-import {readJsonSafe} from './validate-utils';
+import { readJsonSafe, ensureHttpsUrl, normalizeProxyUrl } from "./validate-utils";
+import { config } from "./config";
+
+let cachedProxyUrl = null;
+let cachedProxyDispatcher = null;
 
 /**
  * Helpers
@@ -14,20 +22,82 @@ export function sleep(ms) {
 export function normalizeUrl(u) {
   if (typeof u !== "string" || !u.trim()) return null;
   try {
-    const url = new URL(u);
+    const url = new URL(u.trim());
     return url.toString();
   } catch {
     return null;
   }
 }
 
+function getEnvProxy() {
+  if (!process?.env) return null;
+  return (
+    process.env.HTTPS_PROXY ||
+    process.env.https_proxy ||
+    process.env.HTTP_PROXY ||
+    process.env.http_proxy ||
+    null
+  );
+}
+
+async function resolveProxyDispatcher() {
+  const configuredProxy = normalizeProxyUrl(config.proxy);
+  const envProxy = normalizeProxyUrl(getEnvProxy());
+  const proxyUrl = configuredProxy || envProxy;
+
+  if (!proxyUrl) return null;
+
+  if (cachedProxyUrl === proxyUrl && cachedProxyDispatcher) {
+    return cachedProxyDispatcher;
+  }
+
+  let undici;
+  try {
+    undici = await import("undici");
+  } catch (err) {
+    throw new ShortPixelInvalidRequestError(
+      "Proxy is configured but undici is unavailable for proxy support.",
+      { spCode: -104, payload: proxyUrl, cause: err }
+    );
+  }
+
+  if (typeof undici.ProxyAgent !== "function") {
+    throw new ShortPixelInvalidRequestError("ProxyAgent is not available in undici.", {
+      spCode: -104,
+      payload: proxyUrl
+    });
+  }
+
+  if (cachedProxyDispatcher && typeof cachedProxyDispatcher.close === "function") {
+    try {
+      await cachedProxyDispatcher.close();
+    } catch {
+      // ignore close errors when replacing dispatcher
+    }
+  }
+
+  cachedProxyDispatcher = new undici.ProxyAgent(proxyUrl);
+  cachedProxyUrl = proxyUrl;
+
+  return cachedProxyDispatcher;
+}
+
 export async function fetchWithTimeout(url, options, timeoutMs) {
+  const safeUrl = ensureHttpsUrl(url, { fieldName: "Request URL", spCode: -102 });
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    return await fetch(url, { ...options, signal: controller.signal });
+    const fetchOptions = { ...options, signal: controller.signal };
+    const dispatcher = await resolveProxyDispatcher();
+
+    if (dispatcher && fetchOptions.dispatcher == null) {
+      fetchOptions.dispatcher = dispatcher;
+    }
+
+    return await fetch(safeUrl, fetchOptions);
   } catch (err) {
+    if (err instanceof ShortPixelInvalidRequestError) throw err;
     throw new ShortPixelTemporaryError("Network/timeout error while calling ShortPixel.", { cause: err });
   } finally {
     clearTimeout(id);

@@ -5,6 +5,81 @@ import {
   ShortPixelInvalidRequestError
 } from "./error-utils";
 
+const HTTPS_PROTOCOL = "https:";
+const HTTP_PROTOCOL = "http:";
+
+export function normalizeProxyUrl(proxy) {
+  if (proxy == null || proxy === "") return null;
+  if (typeof proxy !== "string" || !proxy.trim()) {
+    throw new ShortPixelInvalidRequestError("config.proxy must be a non-empty string.", {
+      spCode: -104,
+      payload: proxy
+    });
+  }
+
+  let parsed;
+  try {
+    parsed = new URL(proxy.trim());
+  } catch {
+    throw new ShortPixelInvalidRequestError("config.proxy must be a valid URL.", {
+      spCode: -104,
+      payload: proxy
+    });
+  }
+
+  if (parsed.protocol !== HTTP_PROTOCOL && parsed.protocol !== HTTPS_PROTOCOL) {
+    throw new ShortPixelInvalidRequestError("config.proxy must use http:// or https:// protocol.", {
+      spCode: -104,
+      payload: proxy
+    });
+  }
+
+  return parsed.toString();
+}
+
+export function ensureHttpsUrl(
+  url,
+  { fieldName = "URL", spCode = -102, upgradeHttp = false } = {}
+) {
+  if (typeof url !== "string" || !url.trim()) {
+    throw new ShortPixelInvalidRequestError(`${fieldName} must be a non-empty URL string.`, {
+      spCode,
+      payload: url
+    });
+  }
+
+  let parsed;
+  try {
+    parsed = new URL(url.trim());
+  } catch {
+    throw new ShortPixelInvalidRequestError(`${fieldName} is not a valid URL.`, {
+      spCode,
+      payload: url
+    });
+  }
+
+  if (parsed.protocol === HTTP_PROTOCOL) {
+    if (upgradeHttp) {
+      parsed.protocol = HTTPS_PROTOCOL;
+      return parsed.toString();
+    }
+
+    throw new ShortPixelInvalidRequestError(
+      `${fieldName} must use HTTPS. HTTP requests are blocked.`,
+      { spCode, payload: url }
+    );
+  }
+
+  if (parsed.protocol !== HTTPS_PROTOCOL) {
+    throw new ShortPixelInvalidRequestError(`${fieldName} must use HTTPS protocol.`, {
+      spCode,
+      payload: url
+    });
+  }
+
+  return parsed.toString();
+}
+
 export function validateConfig() {
   if (!config.key || typeof config.key !== "string" || !config.key.trim()) {
     throw new ShortPixelAuthError("Missing ShortPixel API key (config.key).", { spCode: -401 });
@@ -16,6 +91,10 @@ export function validateConfig() {
     throw new ShortPixelInvalidRequestError("config.plugin_version must be max 5 characters.", {
       spCode: -104
     });
+  }
+
+  if (config.proxy !== undefined) {
+    config.proxy = normalizeProxyUrl(config.proxy);
   }
 }
 
@@ -83,4 +162,3 @@ export function validatePollConfig(poll) {
     throw new ShortPixelInvalidRequestError("poll.interval must be a non-negative integer (ms).");
   }
 }
-

@@ -1,6 +1,7 @@
 const defaultConfig = {
   key: "",
   plugin_version: "NP001",
+  proxy: null,
   timeout: 30000,
   retries: 2,
   retryDelay: 800,

@@ -40,7 +40,7 @@
  *
  * You may also create a source by yourself altough is not recommended. (The property Source exposes the class)
  *
- * Note : Proxy is not yet implemented.
+ * Note : Proxy can be configured in the constructor (or via set("proxy", value)).
  *
 */
 
@@ -99,7 +99,7 @@ class Client {
   }
 
   set(name, value){
-    if (_config[name] != null)
+    if (Object.prototype.hasOwnProperty.call(_config, name))
       _config[name] = value;
   }
 

@@ -1,5 +1,6 @@
 import { describe, test, expect, jest } from "@jest/globals";
 import SHORTPIXEL from "../main.js";
+import { config } from "../components/config.js";
 
 const { ShortPixelClient } = SHORTPIXEL;
 
@@ -9,6 +10,13 @@ test("Generating a client", () => {
 });
 
 describe("Client aliases and feature helpers", () => {
+  test("set can update nullable config keys like proxy", () => {
+    const client = new ShortPixelClient({ apiKey: "x" });
+    client.set("proxy", "http://127.0.0.1:8080");
+    expect(config.proxy).toBe("http://127.0.0.1:8080");
+    config.proxy = null;
+  });
+
   test("optimizeFile proxies to fromFile", async () => {
     const client = new ShortPixelClient({ apiKey: "x" });
     const expected = { ok: true };

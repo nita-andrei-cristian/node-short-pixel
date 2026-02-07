@@ -198,7 +198,8 @@ new ShortPixelClient({ apiKey, pluginVersion = "NP001", proxy = null })
 
 - `apiKey` is required.
 - `pluginVersion` must be a string with max 5 characters. Altough it's optional
-- ```proxy``` is yed to be implmented
+- `proxy` is optional and can use `http://` or `https://` proxy URLs.
+- All final outbound image/API requests are forced to `https://`; `http://` targets are rejected with error.
 
 ### Runtime config
 
@@ -213,6 +214,7 @@ Useful keys:
 - `retryDelay` (ms)
 - `wait`
 - `convertto`
+- `proxy`
 - `poll` -> `{ enabled, interval, maxAttempts }`
 
 #### Important
