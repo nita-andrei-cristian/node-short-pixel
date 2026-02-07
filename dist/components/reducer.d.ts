@@ -1,0 +1,12 @@
+import { Source } from "./reducer/source";
+import { fromUrl } from "./reducer/source";
+import { fromUrls } from "./reducer/source";
+import { fromURLs } from "./reducer/source";
+import { fromBuffer } from "./reducer/source";
+import { fromBuffers } from "./reducer/source";
+import { fromFile } from "./reducer/source";
+import { fromFiles } from "./reducer/source";
+import { config as _config } from "./config";
+import { pickBestOutputUrl } from "./reducer/pick-best-output-url";
+export { Source, fromUrl, fromUrls, fromURLs, fromBuffer, fromBuffers, fromFile, fromFiles, _config, pickBestOutputUrl };
+//# sourceMappingURL=reducer.d.ts.map

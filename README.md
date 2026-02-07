@@ -625,6 +625,7 @@ Run specific integration groups:
 ```bash
 RUN_SHORTPIXEL_REAL=2 SHORTPIXEL_API_KEY="your-key" npm test
 RUN_SHORTPIXEL_REAL=3 SHORTPIXEL_API_KEY="your-key" npm test
+RUN_SHORTPIXEL_REAL=4 SHORTPIXEL_API_KEY="your-key" npm test
 RUN_SHORTPIXEL_ALL_REAL=1 SHORTPIXEL_API_KEY="your-key" npm test
 ```
 

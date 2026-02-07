@@ -2,6 +2,7 @@
   "name": "node-shortpixel",
   "version": "1.0.0",
   "type": "module",
+  "types": "./types/main.d.ts",
   "description": "ShortPixel API integration in node js for optimizing images",
   "main": "main.js",
   "scripts": {
@@ -22,7 +23,8 @@
   },
   "homepage": "https://github.com/nita-andrei-cristian/node-short-pixel#readme",
   "devDependencies": {
-    "jest": "^30.2.0"
+    "jest": "^30.2.0",
+    "typescript": "^5.9.3"
   },
   "dependencies": {
     "form-data": "^4.0.5"
