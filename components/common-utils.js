@@ -146,6 +146,13 @@ export async function requestJsonWithRetry(url, options, { retries, retryDelay, 
 }
 
 export function pickFirstMeta(data) {
+  const maybeStatusObject =
+    data && !Array.isArray(data) && typeof data === "object" ? data : null;
+  const statusCode = Number(maybeStatusObject?.Status?.Code);
+  if (Number.isFinite(statusCode) && statusCode !== 1 && statusCode !== 2) {
+    throw buildErrorFromSp(maybeStatusObject);
+  }
+
   if (!Array.isArray(data) || data.length === 0) {
     throw new ShortPixelError("Unexpected response: expected a non-empty array.", { payload: data });
   }
@@ -176,6 +183,13 @@ export async function pollUntilReady(makeCall, { interval, maxAttempts }) {
 }
 
 export function ensureMetaArray(data) {
+  const maybeStatusObject =
+    data && !Array.isArray(data) && typeof data === "object" ? data : null;
+  const statusCode = Number(maybeStatusObject?.Status?.Code);
+  if (Number.isFinite(statusCode) && statusCode !== 1 && statusCode !== 2) {
+    throw buildErrorFromSp(maybeStatusObject);
+  }
+
   if (!Array.isArray(data) || data.length === 0) {
     throw new ShortPixelError("Unexpected response: expected a non-empty array.", { payload: data });
   }

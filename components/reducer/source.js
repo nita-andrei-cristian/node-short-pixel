@@ -524,7 +524,7 @@ class Source {
 
     if (!Array.isArray(this.lastMetas) || !this.lastMetas.length) {
       throw new ShortPixelInvalidRequestError(
-        "No optimization results found. Call reducer/postReducer first.",
+        "downloadTo cannot run before an optimization call. First run fromUrl/fromUrls/fromFile/fromFiles/fromBuffer/fromBuffers (or client.optimize*), then call source.downloadTo(...).",
         { spCode: -109 }
       );
     }
@@ -555,10 +555,32 @@ class Source {
     for (let i = 0; i < this.lastMetas.length; i++) {
       // for each meta we download
       const meta = this.lastMetas[i];
+      const statusCode = getSpCode(meta);
+      if (statusCode === 1) {
+        throw new ShortPixelTemporaryError(
+          `downloadTo cannot continue because item #${i + 1} is still pending optimization.`,
+          {
+            spCode: 1,
+            spMessage: meta?.Status?.Message ?? "Image still pending.",
+            payload: meta
+          }
+        );
+      }
+      if (Number.isFinite(statusCode) && statusCode !== 2) {
+        throw buildErrorFromSp(meta);
+      }
+
       const bestUrl = pickBestOutputUrl(meta, effectiveOptions);
 
       if (!bestUrl) {
-        throw new ShortPixelError("No downloadable URL returned by ShortPixel for item.", { payload: meta });
+        throw new ShortPixelError(
+          `downloadTo could not find an output URL for item #${i + 1}. Ensure optimization completed successfully before downloading.`,
+          {
+            spCode: Number.isFinite(statusCode) ? statusCode : null,
+            spMessage: meta?.Status?.Message ?? null,
+            payload: meta
+          }
+        );
       }
 
       // Output URLs from provider metadata should still be fetched securely.

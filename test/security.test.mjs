@@ -94,4 +94,46 @@ describe("Network security and proxy behavior", () => {
       await fs.promises.rm(outDir, { recursive: true, force: true });
     }
   });
+
+  test("surfaces Wrong API Key as an explicit auth error", async () => {
+    const client = new ShortPixelClient({ apiKey: "wrong-key" });
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: { get: () => "application/json" },
+      text: async () => JSON.stringify({
+        Status: { Code: -402, Message: "Wrong API Key." }
+      })
+    });
+
+    let err = null;
+    try {
+      await client.fromBuffer(Buffer.from("abc"), "demo.png");
+    } catch (e) {
+      err = e;
+    }
+
+    expect(err).toBeTruthy();
+    expect(err.name).toBe("ShortPixelAuthError");
+    expect(err.spCode).toBe(-402);
+    expect(err.spMessage).toBe("Wrong API Key.");
+    expect(err.message).toMatch(/wrong api key/i);
+  });
+
+  test("downloadTo fails with an explicit message when no optimization ran", async () => {
+    const src = new Source();
+
+    let err = null;
+    try {
+      await src.downloadTo(path.join(os.tmpdir(), "sp-no-opt"));
+    } catch (e) {
+      err = e;
+    }
+
+    expect(err).toBeTruthy();
+    expect(err.name).toBe("ShortPixelInvalidRequestError");
+    expect(err.message).toMatch(/downloadTo cannot run before an optimization call/i);
+    expect(err.message).toMatch(/fromUrl|optimize/i);
+  });
 });
