@@ -73,6 +73,8 @@ import SHORTPIXEL from "shortpixel";
 - ESM (`"type": "module"`)
 - Modern Node.js (ideally Node 20+)
 
+It may work by not setting `type` at all, but it's not stable.
+
 ---
 
 ## Quick Start
