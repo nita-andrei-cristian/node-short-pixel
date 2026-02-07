@@ -214,6 +214,20 @@ new ShortPixelClient({ apiKey, pluginVersion = "NP001", proxy = null })
 - `proxy` is optional and can use `http://` or `https://` proxy URLs.
 - All final outbound image/API requests are forced to `https://`; `http://` targets are rejected with error.
 
+### HTTPS security model (important)
+
+HTTPS is mandatory in this SDK for security reasons:
+
+- protects image/API traffic against interception (confidentiality),
+- prevents payload tampering in transit (integrity),
+- validates the remote host identity via TLS certificates (authenticity).
+
+Behavior details:
+
+- direct input URLs over `http://` are rejected before network calls,
+- output/polling metadata that may come back as `http://` from upstream APIs is upgraded to `https://` automatically,
+- the SDK never performs final outbound requests over plain HTTP.
+
 ### Runtime config
 
 ```js
@@ -336,7 +350,6 @@ await src.downloadTo("./output");
 ## 3) Generic optimization without specifying input type
 
 ```js
-// Urls are yet to be tested in production
 const srcA = await cli.optimize("test/assets/panda-small.png", { lossy: 0 });
 const srcB = await cli.optimize("https://images.unsplash.com/photo-1506744038136-46273834b3fb", { lossy: 1 });
 const srcC = await cli.optimize(Buffer.from("..."), { filename: "upload.png", lossy: 2 });
@@ -404,7 +417,6 @@ await src.downloadTo("test/output-real");
 Custom background image URL:
 
 ```js
-// untested in production environments
 const src = await cli.backgroundChange(
   "test/assets/panda-small.png",
   "https://example.com/background.jpg",
@@ -450,7 +462,6 @@ await src.downloadTo("test/output-real");
 ## 11) URL batch
 
 ```js
-// this hasn't been tested in production yet
 const src = await cli.fromUrls([
   "https://images.unsplash.com/photo-1506744038136-46273834b3fb",
   "https://images.unsplash.com/photo-1506744038136-46273834b3fb"
@@ -619,6 +630,8 @@ Retry is used for temporary failures (for example 429, 5xx, temporary SP codes).
 ---
 
 ## Running tests
+
+Please install the development dependency jest js before running tests.
 
 Unit tests:
 

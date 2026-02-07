@@ -50,6 +50,20 @@ const assertReady = (src, options = {}, expectedExt = null) => {
 
 (RUN_REAL ? describe : describe.skip)(`ShortPixel REAL integration [tag ${TEST_TAG}] (url + background-url)`, () => {
   let cli;
+  const urlCases = [
+    {
+      name: "url-optimize",
+      options: { lossy: 1, convertto: "+webp" },
+      expectedExt: "webp",
+      run: () => cli.fromUrl(remoteSourceUrl, { lossy: 1, convertto: "+webp" }),
+    },
+    {
+      name: "background-url",
+      options: { bg_remove: remoteBackgroundUrl, convertto: "+webp" },
+      expectedExt: "webp",
+      run: () => cli.backgroundChange(pandaSmall, remoteBackgroundUrl, { convertto: "+webp" }),
+    },
+  ];
 
   beforeAll(async () => {
     if (!API_KEY) {
@@ -66,21 +80,10 @@ const assertReady = (src, options = {}, expectedExt = null) => {
     cli.set("poll", { enabled: true, interval: 2000, maxAttempts: 30 });
   });
 
-  test("optimizes a remote URL and downloads the result", async () => {
-    const options = { lossy: 1, convertto: "+webp" };
-    const src = await cli.fromUrl(remoteSourceUrl, options);
-    assertReady(src, options, "webp");
-
-    const files = await src.downloadTo(await outputFor("url-optimize"));
-    expect(files.length).toBe(1);
-  }, 180000);
-
-  test("replaces panda-small.png background using a URL background image", async () => {
-    const options = { convertto: "+webp" };
-    const src = await cli.backgroundChange(pandaSmall, remoteBackgroundUrl, options);
-    assertReady(src, { bg_remove: remoteBackgroundUrl, ...options }, "webp");
-
-    const files = await src.downloadTo(await outputFor("background-url"));
+  test.concurrent.each(urlCases)("runs URL scenario: $name", async ({ name, run, options, expectedExt }) => {
+    const src = await run();
+    assertReady(src, options, expectedExt);
+    const files = await src.downloadTo(await outputFor(name));
     expect(files.length).toBe(1);
   }, 300000);
 });

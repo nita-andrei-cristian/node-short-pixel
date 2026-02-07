@@ -95,6 +95,47 @@ describe("Network security and proxy behavior", () => {
     }
   });
 
+  test("postReducer polling upgrades HTTP OriginalURL metadata to HTTPS", async () => {
+    const client = new ShortPixelClient({ apiKey: "x" });
+    client.set("poll", { enabled: true, interval: 0, maxAttempts: 2 });
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: { get: () => "application/json" },
+        text: async () =>
+          JSON.stringify([
+            {
+              Status: { Code: 1, Message: "Still processing" },
+              OriginalURL: "http://example.com/pending-image.png"
+            }
+          ])
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: { get: () => "application/json" },
+        text: async () =>
+          JSON.stringify([
+            {
+              Status: { Code: 2, Message: "Done" },
+              OriginalURL: "http://example.com/pending-image.png",
+              LossyURL: "https://example.com/final-image.webp"
+            }
+          ])
+      });
+
+    const src = await client.fromFile(path.join("test", "assets", "panda-small.png"), { lossy: 1 });
+
+    expect(src.lastMetas?.[0]?.Status?.Code).toBe(2);
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+
+    const pollPayload = JSON.parse(global.fetch.mock.calls[1][1].body);
+    expect(pollPayload.urllist).toEqual(["https://example.com/pending-image.png"]);
+  });
+
   test("surfaces Wrong API Key as an explicit auth error", async () => {
     const client = new ShortPixelClient({ apiKey: "wrong-key" });
 

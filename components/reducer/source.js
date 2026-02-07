@@ -447,7 +447,13 @@ class Source {
         plugin_version: config.plugin_version,
         wait: config.wait,
         urllist: currentPendingOriginals.map((u, idx) =>
-          encodeURI(ensureHttpsUrl(u, { fieldName: `Polling URL #${idx + 1}`, spCode: -102 }))
+          encodeURI(
+            ensureHttpsUrl(u, {
+              fieldName: `Polling URL #${idx + 1}`,
+              spCode: -102,
+              upgradeHttp: true
+            })
+          )
         ),
         ...effectiveOptions
       };
