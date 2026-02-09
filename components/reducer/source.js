@@ -72,6 +72,11 @@ import { REDUCER_URL, POST_REDUCER_URL } from "./constants.js";
 
 /**
  * The Source class (Inspired by tinify style)
+ *
+ * This works by calling either reducer (uses REDUCER API) or post-reducer (uses POST-REDUCER API)
+ * both function enter a process which waits for shortpixel to finish optimizing the image then save the metas.
+ *
+ * the lastMetas (saved from the post-reducer or reducer) are meant to be used by the download function.
  */
 class Source {
   constructor({ url = null, urls = null, buffer = null, filename = null, files = null } = {}) {
@@ -89,7 +94,7 @@ class Source {
   }
 
   _getEffectiveOptions() {
-  // apply the default config conversion or per-call conversion
+  // apply the default config conversion or per-call conversion (applied in the client)
     const defaultConvert =
       typeof config.convertto === "string" && config.convertto.trim() ? config.convertto : null;
 
@@ -100,7 +105,7 @@ class Source {
   }
 
   setOptions(opts = {}) {
-    // See "https://shortpixel.com/api-docs" for more info.
+    // See "https://shortpixel.com/api-docs" for more info. (Or this module documenation)
     // YOU CAN PASS via OPTS ANY KIND OF API-SUPPORTED parameter
     this.options = { ...this.options, ...opts };
     return this;
@@ -118,6 +123,9 @@ class Source {
 
     const effectiveOptions = this._getEffectiveOptions();
     const { urllist: _ignoredUrlList, ...optsWithoutUrlList } = effectiveOptions || {};
+    /*
+     * The function begins by normalizing the urls
+     * */
 
     // ensures input urls are existing and normalizes the list
     // without this erros may occur when reading url
@@ -204,6 +212,12 @@ class Source {
       throw new ShortPixelBatchError("One or more URLs failed during reducer call.", { items: perItem });
     }
 
+    /*
+     * THE PROCESS OF POOLING STARTS
+     *
+     * We'll wait for all pending urls (basically metas with code 1) to become a code 2 (finished url)
+     * */
+
     // Poll pending URLs (Code 1) if enabled
     if (config.poll?.enabled) {
       let attempts = 0;
@@ -249,6 +263,7 @@ class Source {
     }
 
 
+    // SHIP THE FINAL RESULT
     const ordered = perItem.slice().sort((a, b) => a.index - b.index);
     const finalMetas = ordered.map((x) => x.meta);
 
@@ -268,7 +283,7 @@ class Source {
    *
    * Remember, this is the API specific for files and buffer in general. Reducer is only for URL.
    *
-   * The process is a bit more complex here than the reducer API.
+   * The process is a bit more complex here than the reducer API but similar.
    */
   async postReducer() {
     // always sanitize data when starting
@@ -278,6 +293,7 @@ class Source {
     validateOptions(effectiveOptions);
     validatePollConfig(config.poll);
 
+    // We need to normalize the files as {buffer : ?, filename : ?}. They will be used in batch processing. 
     const files = Array.isArray(this.files) && this.files.length
       ? this.files
       : [{ buffer: this.buffer ?? null, filename: this.filename ?? null }];
@@ -298,12 +314,14 @@ class Source {
         });
       }
 
+      // calculate a display name for each file.
       const displayName =
         typeof f.filename === "string" && f.filename.trim()
           ? f.filename.trim()
           : `upload_${idx + 1}.bin`;
 
       if (!hasBuffer) {
+        // sanity check to make sure the file actually exists locally
         if (!fs.existsSync(displayName)) {
           throw new ShortPixelInvalidRequestError("Local file does not exist for postReducer.", {
             spCode: -115,
@@ -314,11 +332,11 @@ class Source {
 
       // items is the array that resembles our input
       return {
-        index: idx, // image index : 0, 1, 2 , ...
+        index: idx, // image index : 0, 1, 2 , ... will be usefull when remapping the results in sequence
         buffer: hasBuffer ? f.buffer : null, // local file or buffer
         path: hasBuffer ? null : displayName, // local file or buffer
-        displayName, // display name (each file has one)
-        fileKey: `file${idx + 1}` // ID
+        displayName, // display name (each file has one, usefull for identification)
+        fileKey: `file${idx + 1}` // interal ID
       };
     });
 
@@ -394,7 +412,7 @@ class Source {
       if (code === 1 || code === 2) return { index: it.index, input: it, meta };
 
       const err = buildErrorFromSp(meta);
-      return { index: it.index, input: it, error: err, meta };
+      return { index: it.index, input: it, error: err, meta }; // builds this usefull structure for veryfing statuses of each meta
     });
 
     // Here iamges may fail, see the status message for info
@@ -433,6 +451,15 @@ class Source {
     let attempts = 0;
     // This is the "slow part" of the process, the Polling loop.
     // Here we will obtain the data 'by force'. We poll continuosly only for the items not loaded
+    //
+    // this works by comparing our old metas with the new metas from shortpixel, if they differ we respond correctly
+    //
+    // makeUploadCall -> Waits for server response -> We verify if all the files are found -> Throw error
+    //
+    // Each file status is verified, if it was successfull or not
+    //
+    // Polling in this context means the function will be repeatdly called untill the files are loaded. (with a delay in-between)
+    //
     while (attempts < config.poll.maxAttempts) {
       const currentPendingOriginals = perItem
         .filter((x) => x.meta && getSpCode(x.meta) === 1)
@@ -537,9 +564,12 @@ class Source {
 
     await fs.promises.mkdir(outputDir, { recursive: true });
 
-    const downloads = [];
-    const effectiveOptions = this._getEffectiveOptions();
+    // store the download data here
+    const downloads = []; // stores {path, meta}
 
+    const effectiveOptions = this._getEffectiveOptions(); // settings
+
+    // file extension
     const pickExtension = (bestUrlExt, converttoExt, sourceExt) => {
       if (converttoExt) return converttoExt;
       if (bestUrlExt) return bestUrlExt;
@@ -547,6 +577,7 @@ class Source {
       return "bin";
     };
 
+    // we'll map the names to an extension
     const converttoToExt = (converttoRaw) => {
       const c = typeof converttoRaw === "string" ? converttoRaw.toLowerCase() : "";
       if (!c) return null;
@@ -558,6 +589,7 @@ class Source {
       return null;
     };
 
+    // Loop over each optimized image
     for (let i = 0; i < this.lastMetas.length; i++) {
       // for each meta we download
       const meta = this.lastMetas[i];
@@ -576,6 +608,7 @@ class Source {
         throw buildErrorFromSp(meta);
       }
 
+      // get best url (webp or avif or original) of a meta based on settings
       const bestUrl = pickBestOutputUrl(meta, effectiveOptions);
 
       if (!bestUrl) {
@@ -607,11 +640,15 @@ class Source {
         });
       }
 
-      // construct the buf
+      // construct the buf (prepare for download)
       const buf = Buffer.from(await res.arrayBuffer());
       const urlPath = new URL(downloadUrl).pathname || "";
       const nameFromUrl = path.basename(urlPath) || null;
 
+      /*
+       * A quick reminder fragment from above
+        input: { urls: inputUrls, url: inputUrls[idx], normalizedUrl: u, displayName: deriveUrlName(inputUrls[idx]) },
+       * */
       const inputInfo = this.lastResults?.[i]?.input ?? null;
       const sourceNameRaw =
         (inputInfo?.displayName && path.basename(inputInfo.displayName)) || // verify all requirments

@@ -8,6 +8,7 @@ import {
 const HTTPS_PROTOCOL = "https:";
 const HTTP_PROTOCOL = "http:";
 
+// normalizes a proxy url (sanitizer)
 export function normalizeProxyUrl(proxy) {
   if (proxy == null || proxy === "") return null;
   if (typeof proxy !== "string" || !proxy.trim()) {
@@ -37,6 +38,8 @@ export function normalizeProxyUrl(proxy) {
   return parsed.toString();
 }
 
+
+// ensure https url (security) 
 export function ensureHttpsUrl(
   url,
   { fieldName = "URL", spCode = -102, upgradeHttp = false } = {}
