@@ -17,7 +17,7 @@
     "image"
   ],
   "author": "nita-andrei-cristian",
-  "license": "GPL",
+  "license": "GPL-3.0-only",
   "bugs": {
     "url": "https://github.com/nita-andrei-cristian/node-short-pixel/issues"
   },
