@@ -50,13 +50,13 @@ In short:
 ## Installation
 
 ```bash
-npm install https://github.com/nita-andrei-cristian/node-short-pixel.git
+npm i @shortpixel-com/shortpixel
 ```
 
 After installation, import from `shortpixel`:
 
 ```js
-import SHORTPIXEL from "shortpixel";
+import SHORTPIXEL from "@shortpixel-com/shortpixel";
 ```
 
 ### Runtime requirements
@@ -80,7 +80,7 @@ It may work by not setting `type` at all, but it's not stable.
 ## Quick Start
 
 ```js
-import SHORTPIXEL from "shortpixel";
+import SHORTPIXEL from "@shortpixel-com/shortpixel";
 
 const { ShortPixelClient } = SHORTPIXEL;
 const cli = new ShortPixelClient({
