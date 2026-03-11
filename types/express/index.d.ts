@@ -1,5 +1,6 @@
 export interface ShortPixelExpressOptions {
     apiKey?: string;
+    passthrough?: boolean;
     extraWhitelist?: string[];
     blacklist?: string[];
     overrideWhitelist?: string[];

@@ -401,6 +401,7 @@ export function ShortPixelExpress(options = {}) {
   // Extract Options and initialize client
   const {
     apiKey,
+    passthrough = false,
     extraWhitelist = [],
     blacklist = [],
     overrideWhitelist = null,
@@ -426,6 +427,11 @@ export function ShortPixelExpress(options = {}) {
       // search and extract files, extract body urls
 
       if (!files.length && !urls.length && !paths.length) {
+        if (passthrough) {
+          next();
+          return;
+        }
+
         if (rawFiles.length || hasRequestBody(req)) {
           throw buildMissingWhitelistError(req, resolvedWhitelist, rawFiles);
         }
