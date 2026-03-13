@@ -67,6 +67,13 @@ export class Source {
         path: any;
         meta: any;
     }[]>;
+    downloadToBuffer({ timeout }?: {
+        timeout?: any;
+    }): Promise<{
+        buffer: any;
+        meta: any;
+        filename: string;
+    }[]>;
 }
 /**
  * HELPERS

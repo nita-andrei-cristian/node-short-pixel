@@ -6,7 +6,10 @@
   "description": "ShortPixel API integration in node js for optimizing images",
   "main": "main.js",
   "scripts": {
-    "test": "NODE_OPTIONS=--experimental-vm-modules jest"
+    "test": "NODE_OPTIONS=--experimental-vm-modules jest",
+    "test:express": "node tests/express-app.js",
+    "test:express:global": "node tests/express-app-global.js",
+    "test:express:basic": "node tests/test-basic.js"
   },
   "repository": {
     "type": "git",
@@ -23,6 +26,8 @@
   },
   "homepage": "https://github.com/nita-andrei-cristian/node-short-pixel#readme",
   "devDependencies": {
+    "express": "^5.1.0",
+    "multer": "^2.0.2",
     "typescript": "^5.9.3"
   },
   "dependencies": {

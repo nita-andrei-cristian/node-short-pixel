@@ -555,140 +555,147 @@ class Source {
       });
     }
 
-    if (!Array.isArray(this.lastMetas) || !this.lastMetas.length) {
-      throw new ShortPixelInvalidRequestError(
-        "downloadTo cannot run before an optimization call. First run fromUrl/fromUrls/fromFile/fromFiles/fromBuffer/fromBuffers (or client.optimize*), then call source.downloadTo(...).",
-        { spCode: -109 }
+    await fs.promises.mkdir(outputDir, { recursive: true });
+
+    const downloads = await collectDownloads(this, { timeout });
+    const writtenFiles = [];
+
+    for (const download of downloads) {
+      const outPath = path.join(outputDir, download.filename);
+      await fs.promises.writeFile(outPath, download.buffer);
+      writtenFiles.push({ path: outPath, meta: download.meta });
+    }
+
+    return writtenFiles;
+  }
+
+  /**
+   * Download the optimized files from the latest reducer/postReducer call into memory.
+   * Returns an array of { buffer, meta, filename }.
+   */
+  async downloadToBuffer({ timeout = config.timeout } = {}) {
+    return await collectDownloads(this, { timeout });
+  }
+}
+
+function pickDownloadExtension(bestUrlExt, converttoExt, sourceExt) {
+  if (converttoExt) return converttoExt;
+  if (bestUrlExt) return bestUrlExt;
+  if (sourceExt) return sourceExt;
+  return "bin";
+}
+
+function converttoToExtension(converttoRaw) {
+  const c = typeof converttoRaw === "string" ? converttoRaw.toLowerCase() : "";
+  if (!c) return null;
+  if (c.includes("avif")) return "avif";
+  if (c.includes("webp")) return "webp";
+  if (c.includes("png")) return "png";
+  if (c.includes("jpeg")) return "jpeg";
+  if (c.includes("jpg")) return "jpg";
+  return null;
+}
+
+function buildDownloadFilename(source, meta, downloadUrl, index, effectiveOptions) {
+  const urlPath = new URL(downloadUrl).pathname || "";
+  const nameFromUrl = path.basename(urlPath) || null;
+  const inputInfo = source.lastResults?.[index]?.input ?? null;
+  const sourceNameRaw =
+    (inputInfo?.displayName && path.basename(inputInfo.displayName)) ||
+    (inputInfo?.path && path.basename(inputInfo.path)) ||
+    (inputInfo?.filename && path.basename(inputInfo.filename)) ||
+    (inputInfo?.url && (() => {
+      try {
+        return path.basename(new URL(inputInfo.url).pathname || "");
+      } catch {
+        return null;
+      }
+    })()) ||
+    (meta?.OriginalURL && (() => {
+      try {
+        return path.basename(new URL(meta.OriginalURL).pathname || "");
+      } catch {
+        return null;
+      }
+    })()) ||
+    null;
+
+  const parsedSource = sourceNameRaw ? path.parse(sourceNameRaw) : null;
+  const sourceBase = parsedSource?.name || `optimized_${index + 1}`;
+  const sourceExt = parsedSource?.ext ? parsedSource.ext.replace(/^\./, "").toLowerCase() : null;
+  const bestUrlExt = path.extname(nameFromUrl || "").replace(/^\./, "").toLowerCase() || null;
+  const converttoExt = converttoToExtension(effectiveOptions.convertto);
+  const finalExt = pickDownloadExtension(bestUrlExt, converttoExt, sourceExt);
+
+  return `${sourceBase}.${finalExt}`;
+}
+
+async function collectDownloads(source, { timeout = config.timeout } = {}) {
+  if (!Array.isArray(source.lastMetas) || !source.lastMetas.length) {
+    throw new ShortPixelInvalidRequestError(
+      "A download cannot run before an optimization call. First run fromUrl/fromUrls/fromFile/fromFiles/fromBuffer/fromBuffers (or client.optimize*), then call source.downloadTo(...) or source.downloadToBuffer().",
+      { spCode: -109 }
+    );
+  }
+
+  const downloads = [];
+  const effectiveOptions = source._getEffectiveOptions();
+
+  for (let i = 0; i < source.lastMetas.length; i++) {
+    const meta = source.lastMetas[i];
+    const statusCode = getSpCode(meta);
+
+    if (statusCode === 1) {
+      throw new ShortPixelTemporaryError(
+        `Download cannot continue because item #${i + 1} is still pending optimization.`,
+        {
+          spCode: 1,
+          spMessage: meta?.Status?.Message ?? "Image still pending.",
+          payload: meta
+        }
       );
     }
 
-    await fs.promises.mkdir(outputDir, { recursive: true });
-
-    // store the download data here
-    const downloads = []; // stores {path, meta}
-
-    const effectiveOptions = this._getEffectiveOptions(); // settings
-
-    // file extension
-    const pickExtension = (bestUrlExt, converttoExt, sourceExt) => {
-      if (converttoExt) return converttoExt;
-      if (bestUrlExt) return bestUrlExt;
-      if (sourceExt) return sourceExt;
-      return "bin";
-    };
-
-    // we'll map the names to an extension
-    const converttoToExt = (converttoRaw) => {
-      const c = typeof converttoRaw === "string" ? converttoRaw.toLowerCase() : "";
-      if (!c) return null;
-      if (c.includes("avif")) return "avif";
-      if (c.includes("webp")) return "webp";
-      if (c.includes("png")) return "png";
-      if (c.includes("jpeg")) return "jpeg";
-      if (c.includes("jpg")) return "jpg";
-      return null;
-    };
-
-    // Loop over each optimized image
-    for (let i = 0; i < this.lastMetas.length; i++) {
-      // for each meta we download
-      const meta = this.lastMetas[i];
-      const statusCode = getSpCode(meta);
-      if (statusCode === 1) {
-        throw new ShortPixelTemporaryError(
-          `downloadTo cannot continue because item #${i + 1} is still pending optimization.`,
-          {
-            spCode: 1,
-            spMessage: meta?.Status?.Message ?? "Image still pending.",
-            payload: meta
-          }
-        );
-      }
-      if (Number.isFinite(statusCode) && statusCode !== 2) {
-        throw buildErrorFromSp(meta);
-      }
-
-      // get best url (webp or avif or original) of a meta based on settings
-      const bestUrl = pickBestOutputUrl(meta, effectiveOptions);
-
-      if (!bestUrl) {
-        throw new ShortPixelError(
-          `downloadTo could not find an output URL for item #${i + 1}. Ensure optimization completed successfully before downloading.`,
-          {
-            spCode: Number.isFinite(statusCode) ? statusCode : null,
-            spMessage: meta?.Status?.Message ?? null,
-            payload: meta
-          }
-        );
-      }
-
-      // Output URLs from provider metadata should still be fetched securely.
-      const downloadUrl = ensureHttpsUrl(bestUrl, {
-        fieldName: "Output URL",
-        spCode: -102,
-        upgradeHttp: true
-      });
-
-      // try to fetch the result
-      const res = await fetchWithTimeout(downloadUrl, { redirect: "follow" }, timeout);
-      if (!res.ok) {
-        const body = await res.text().catch(() => "");
-        throw new ShortPixelError("Failed to download optimized file.", {
-          httpStatus: res.status,
-          payload: body,
-          url: downloadUrl
-        });
-      }
-
-      // construct the buf (prepare for download)
-      const buf = Buffer.from(await res.arrayBuffer());
-      const urlPath = new URL(downloadUrl).pathname || "";
-      const nameFromUrl = path.basename(urlPath) || null;
-
-      /*
-       * A quick reminder fragment from above
-        input: { urls: inputUrls, url: inputUrls[idx], normalizedUrl: u, displayName: deriveUrlName(inputUrls[idx]) },
-       * */
-      const inputInfo = this.lastResults?.[i]?.input ?? null;
-      const sourceNameRaw =
-        (inputInfo?.displayName && path.basename(inputInfo.displayName)) || // verify all requirments
-        (inputInfo?.path && path.basename(inputInfo.path)) ||
-        (inputInfo?.filename && path.basename(inputInfo.filename)) ||
-        (inputInfo?.url && (() => {
-          try {
-            return path.basename(new URL(inputInfo.url).pathname || "");
-          } catch {
-            return null;
-          }
-        })()) ||
-        (meta?.OriginalURL && (() => {
-          try {
-            return path.basename(new URL(meta.OriginalURL).pathname || ""); // revert to orignal url
-          } catch {
-            return null;
-          }
-        })()) ||
-        null;
-
-      // Prepare for writing the file
-      const parsedSource = sourceNameRaw ? path.parse(sourceNameRaw) : null;
-      const sourceBase = parsedSource?.name || `optimized_${i + 1}`;
-      const sourceExt = parsedSource?.ext ? parsedSource.ext.replace(/^\./, "").toLowerCase() : null;
-      const bestUrlExt = path.extname(nameFromUrl || "").replace(/^\./, "").toLowerCase() || null;
-      const converttoExt = converttoToExt(effectiveOptions.convertto);
-
-      const finalExt = pickExtension(bestUrlExt, converttoExt, sourceExt);
-      const outName = `${sourceBase}.${finalExt}`;
-      const outPath = path.join(outputDir, outName);
-
-      await fs.promises.writeFile(outPath, buf);
-
-      downloads.push({ path: outPath, meta });
+    if (Number.isFinite(statusCode) && statusCode !== 2) {
+      throw buildErrorFromSp(meta);
     }
 
-    // returns downloaded files
-    return downloads;
+    const bestUrl = pickBestOutputUrl(meta, effectiveOptions);
+    if (!bestUrl) {
+      throw new ShortPixelError(
+        `downloadTo could not find an output URL for item #${i + 1}. Ensure optimization completed successfully before downloading.`,
+        {
+          spCode: Number.isFinite(statusCode) ? statusCode : null,
+          spMessage: meta?.Status?.Message ?? null,
+          payload: meta
+        }
+      );
+    }
+
+    const downloadUrl = ensureHttpsUrl(bestUrl, {
+      fieldName: "Output URL",
+      spCode: -102,
+      upgradeHttp: true
+    });
+
+    const res = await fetchWithTimeout(downloadUrl, { redirect: "follow" }, timeout);
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new ShortPixelError("Failed to download optimized file.", {
+        httpStatus: res.status,
+        payload: body,
+        url: downloadUrl
+      });
+    }
+
+    downloads.push({
+      buffer: Buffer.from(await res.arrayBuffer()),
+      meta,
+      filename: buildDownloadFilename(source, meta, downloadUrl, i, effectiveOptions)
+    });
   }
+
+  return downloads;
 }
 
 /**
